@@ -163,9 +163,10 @@ class Ymca(tk.Frame):
 
         self._msg_window.insert(tk.END, msg.content + ('' if is_last_msg else '\n'))
 
-
     def _try_profile_folder(self, path):
-        if not self._is_valid_profile_dir(path):
+        msg_dir = self._find_message_dir(path, max_depth=3)
+        profile_dir = self._profile_dir_from_msg_dir(msg_dir)
+        if not profile_dir:
             tkMsgBox.showerror(
                 title='Oops',
                 message='The given directory is not a valid YM profile directory\n(%s)' % path)
@@ -174,12 +175,24 @@ class Ymca(tk.Frame):
         self._profile_path.configure(state=tk.NORMAL)
         self._profile_path.insert(0, path)
         self._profile_path.configure(state='readonly')
-        self._load_profile_dir(path)
-        self._username = os.path.basename(path)
+        self._load_msg_dir(msg_dir)
+        self._username = os.path.basename(profile_dir)
 
-    def _is_valid_profile_dir(self, path):
-        if not os.path.isdir(path):
-            return False
+    def _profile_dir_from_msg_dir(self, msg_dir):
+        if not msg_dir:
+            return None
+        # Profile dir is the grand-parent directory of the message dir
+        # (some_path/profile/archive/messages)
+        path = os.path.abspath(msg_dir)
+        for i in range(2):
+            path = os.path.abspath(os.path.join(path, os.pardir))
+            if not path or not os.path.isdir(path):
+                return None
+        return path
+
+    def _find_message_dir(self, path, max_depth):
+        if not os.path.isdir(path) or max_depth == 0:
+            return None
 
         # Check if the given folder has at least one valid archive file
         for friend_name in os.listdir(path):
@@ -191,11 +204,13 @@ class Ymca(tk.Frame):
                 if os.path.isdir(archive_path):
                     continue
                 if self._archive_name_regex.match(file_name):
-                    return True
+                    return path
 
-        return False
+        for child in os.listdir(path):
+            return self._find_message_dir(os.path.join(path, child), max_depth - 1)
 
-    def _load_profile_dir(self, path):
+
+    def _load_msg_dir(self, path):
         self._clear_friend_list()
 
         idx = 0
