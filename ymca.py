@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 from tkinter import messagebox as tkMsgBox
+from tkinter.constants import ANCHOR
 
 
 def main():
@@ -70,7 +71,13 @@ class Ymca(tk.Frame):
         frame = tk.PanedWindow(orient=tk.HORIZONTAL)
         frame.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True, padx=5, pady=(0, 5))
 
-        self._friend_list = ttk.Treeview(frame, show='tree')
+        self._friend_list = ttk.Treeview(frame)
+        self._friend_list['columns'] = ('file_count')
+        self._friend_list.column('#0', width=150)
+        self._friend_list.column('file_count', width=70, anchor=tk.E)
+        self._friend_list.heading('#0', text='Friend')
+        self._friend_list.heading('file_count', text='File count', anchor=tk.E)
+
         self._friend_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._friend_list.bind('<<TreeviewOpen>>', self._on_friend_dir_open)
         self._friend_list.bind('<<TreeviewSelect>>', self._on_open_archive)
@@ -94,13 +101,13 @@ class Ymca(tk.Frame):
         if not self._friend_list.tag_has(self.friend_node_tag, selected):
             return # We only expand friend nodes
         item = self._friend_list.item(selected)
-        friend_dir, already_expanded = item['values']
-        if not already_expanded:
+        file_count, friend_dir, expanded = Ymca._tree_get_friend_item(item['values'])
+        if file_count and not expanded:
             for child in self._friend_list.get_children(selected):
                 self._friend_list.delete(child)
-            self._expand_friend_archive_list(selected, friend_dir)
+            self._expand_friend_archive_list(selected, friend_dir, file_count)
 
-    def _expand_friend_archive_list(self, friend_item, friend_dir):
+    def _expand_friend_archive_list(self, friend_item, friend_dir, file_count):
         idx = 0
         for file_name in os.listdir(friend_dir):
             archive_path = os.path.join(friend_dir, file_name)
@@ -116,17 +123,17 @@ class Ymca(tk.Frame):
                 friend_item,
                 idx,
                 text=archive_date,
-                values=(archive_path, friend_name),
+                values=('', archive_path, friend_name),
                 tags=[self.archive_node_tag])
             idx += 1
-        self._friend_list.item(friend_item, values=(friend_dir, 'expanded'))
+        self._friend_list.item(friend_item, values=Ymca._tree_make_friend_item(file_count, friend_dir, 'expanded'))
 
     def _on_open_archive(self, event):
         #pylint: disable=unused-argument
         selected = self._friend_list.selection()
         if not self._friend_list.tag_has(self.archive_node_tag, selected):
             return
-        archive_path, friend_name, = self._friend_list.item(selected)['values']
+        archive_path, friend_name = Ymca._tree_get_archive_item(self._friend_list.item(selected)['values'])
         self._load_archive(archive_path, friend_name)
 
     def _load_archive(self, archive_path, friend_name):
@@ -219,34 +226,52 @@ class Ymca(tk.Frame):
             if not os.path.isdir(friend_dir):
                 continue
 
-            has_archive = False
+            archive_count = 0
             for file_name in os.listdir(friend_dir):
                 archive_path = os.path.join(friend_dir, file_name)
                 if os.path.isdir(archive_path):
                     continue
                 if self._archive_name_regex.match(file_name):
-                    has_archive = True
-                    break
-            self._add_friend(idx, friend_name, friend_dir, has_archive)
+                    archive_count += 1
+            self._add_friend(idx, friend_name, friend_dir, archive_count)
             idx += 1
 
     def _clear_friend_list(self):
         for idx in self._friend_list.get_children():
             self._friend_list.delete(idx)
 
-    def _add_friend(self, idx, friend_name, friend_dir, has_archive):
+    def _add_friend(self, idx, friend_name, friend_dir, archive_count):
         self._friend_list.get_children()
         parent = self._friend_list.insert(
             '',
             idx,
             text=friend_name,
-            values=(friend_dir, ''),
+            values=(archive_count, friend_dir, ''),
             tags=[self.friend_node_tag])
 
-        if has_archive:
+        if archive_count:
             # Just create a dummy child entry to reduce the load of the UI
             # We will fill in the archive list once the item is expanded
             self._friend_list.insert(parent, 0)
+
+    @staticmethod
+    def _tree_make_friend_item(friend_dir, file_count, expanded):
+        return (friend_dir, file_count, expanded)
+
+    @staticmethod
+    def _tree_get_friend_item(values):
+        friend_dir, file_count, expanded, = values
+        return (friend_dir, file_count, expanded)
+
+    @staticmethod
+    def _tree_make_archive_item(archive_path, friend_name):
+        file_count = '' # Unused but must be present for the file_count column
+        return ('', archive_path, friend_name)
+
+    @staticmethod
+    def _tree_get_archive_item(values):
+        _, archive_path, friend_name = values
+        return (archive_path, friend_name)
 
 
 class YmArchive:
