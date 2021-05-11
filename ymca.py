@@ -10,7 +10,6 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 from tkinter import messagebox as tkMsgBox
-from tkinter.constants import ANCHOR
 
 
 def main():
@@ -23,6 +22,18 @@ def main():
 
 
 class Ymca(tk.Frame):
+    emo_map = {
+        ':)':   1,  ':(':   2,  ':;':   3,  ':d':   4,  ';;)':  5,
+        '>:D<': 6,  ':-/':  7,  ':x':   8,  ':">':  9,  ':p':   10,
+        ':*':   11, '=((':  12, ':o':   13, 'x(':   14, ':>':   15,
+        'B-)':  16, ':s':   17, '#:-s': 18, '>:)':  19, ':((':  20,
+        ':))':  21, ':|':   22, '/:)':  23, '=))':  24, 'O:)':  25,
+        ':B':   26, '=;':   27,
+        ':?':   39,
+        ';)':   71,
+        ':h':   103,
+    }
+
     friend_node_tag = 'friend'
     archive_node_tag = 'archive'
     archive_date_format = '%Y/%m/%d'
@@ -39,6 +50,26 @@ class Ymca(tk.Frame):
         self._setup_ui()
         if profile_dir:
             self._try_profile_folder(profile_dir)
+        self._emo_img_map = []
+        self._extend_emo_img_map()
+
+    def _extend_emo_img_map(self):
+        emo_img_map = {}
+        for emo in Ymca.emo_map:
+            image_path='res/emoticons/{:03d}.gif'.format(Ymca.emo_map[emo])
+            img = tk.PhotoImage(file=image_path)
+            emo = emo.lower().strip()
+            emo_list = [emo]
+            if emo[0] == ':':
+                emo_list.append(':-' + emo[1:]) # :) --> :-)
+            if emo.upper() != emo:
+                emo_list.append(emo.upper())
+            for emo in emo_list:
+                emo_img_map[emo] = img
+        # Sort key, the longest goes first
+        keys = sorted(emo_img_map.keys(), key=len, reverse=True)
+        for k in keys:
+            self._emo_img_map.append((k, emo_img_map[k]))
 
     def _setup_ui(self):
         self.master.title('YMCA')
@@ -168,7 +199,20 @@ class Ymca(tk.Frame):
             'current lineend')
         pos += len(sender)
 
-        self._msg_window.insert(tk.END, msg.content + ('' if is_last_msg else '\n'))
+        self._add_msg_with_emoticons(msg.content)
+        self._msg_window.insert(tk.END, '' if is_last_msg else '\n')
+
+    def _add_msg_with_emoticons(self, content):
+        for emo, img in self._emo_img_map:
+            idx = content.find(emo)
+            while idx >= 0:
+                if idx > 0:
+                    self._msg_window.insert(tk.END, content[:idx])
+                self._msg_window.image_create(tk.END, image=img)
+                content = content[idx + len(emo):]
+                idx = content.find(emo)
+        if content:
+            self._msg_window.insert(tk.END, content)
 
     def _try_profile_folder(self, path):
         msg_dir = self._find_message_dir(path, max_depth=3)
